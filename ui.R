@@ -48,7 +48,7 @@ ui <- fluidPage(
                  label = strong("Simulation Type"),
                  choices = list("Runtime",
                                 "Throughput"),
-                 selected = "Runtime",
+                 selected = "Throughput",
                  inline = TRUE
                ),
                
@@ -74,11 +74,47 @@ ui <- fluidPage(
                    min = 1,
                    step = 1
                  )
-               )
+               ),
+               
+               actionButton(
+                 inputId = "run", 
+                 label = "Start"),
              ),
              
              mainPanel(
-               uiOutput("header")
+               uiOutput("header"),
+               uiOutput("counter"),
+               hr(),
+               
+               conditionalPanel(
+                 condition = "input.schedulingChoices == 'First Come First Serve'",
+                 
+                 titlePanel("First Come First Serve"),
+                 br(),
+                 br(),
+                 h4("New Process List"),
+                 br(),
+                 tableOutput("fcfsNew"),
+                 br(),
+                 br(),
+                 h4("Ready Queue"),
+                 br(),
+                 tableOutput("fcfsReady"),
+                 br(),
+                 br(),
+                 h4("Running"),
+                 br(),
+                 tableOutput("fcfsRunning"),
+                 br(),
+                 br(),
+                 h4("Terminated"),
+                 br(),
+                 tableOutput("fcfsTerminated"),
+                 br(),
+                 br(),
+               ),
+               
+               hr(),
              )
            )
   )
