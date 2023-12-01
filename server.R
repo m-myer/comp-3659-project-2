@@ -129,7 +129,7 @@ server <- function(session, input, output) {
   
   # Input Validation --------------------------------------------
   
-  iv <- iv <- InputValidator$new()
+  iv <- InputValidator$new()
   
   iv$add_rule("numProcesses", sv_required())
   
