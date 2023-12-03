@@ -25,16 +25,20 @@ server <- function(session, input, output) {
     df_processes(SpawnProcesses())
     df_fcfs$processes <- df_processes()
     clock$count <- 0
-    clock$timer <- reactiveTimer(500)
+    clock$timer <- reactiveTimer(100)
     clock$active <- TRUE
     
   })
   
-  observeEvent(clock$timer(), { # every clock tick
+  observeEvent(req(input$schedulingChoices == 'First Come First Serve' && clock$timer()), { # every clock tick
     req(clock$active == TRUE) # only if simulation is running
     
     UpdateSim(df_fcfs)
     clock$count <- clock$count + 1
+    
+    if(nrow(df_fcfs$terminated) == input$numProcesses){
+      clock$timer <- reactiveTimer(Inf)
+    }
   })
   
   

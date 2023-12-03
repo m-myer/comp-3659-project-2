@@ -3,8 +3,8 @@ ui <- fluidPage(
   
   tabPanel(title = "Main",
            
-           sidebarLayout(
-             sidebarPanel(
+           sidebarLayout( 
+             sidebarPanel( # sidebar ----
                withMathJax(),
                useShinyjs(),
                id = "sidebar",
@@ -81,12 +81,12 @@ ui <- fluidPage(
                  label = "Start"),
              ),
              
-             mainPanel(
+             mainPanel( # mainPanel ----
                uiOutput("header"),
                uiOutput("counter"),
                hr(),
                
-               conditionalPanel(
+               conditionalPanel( # FCFS ----
                  condition = "input.schedulingChoices == 'First Come First Serve'",
                  
                  titlePanel("First Come First Serve"),
