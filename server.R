@@ -12,7 +12,9 @@ server <- function(session, input, output) {
                             readyQueue = data.frame(),
                             running = data.frame(),
                             waiting = data.frame(),
-                            terminated = data.frame())
+                            terminated = data.frame(),
+                            cpuIdleTime = 0)
+  
   
   
   # Observers ---------------------------------------------------
@@ -61,6 +63,10 @@ server <- function(session, input, output) {
     df_fcfs$running
   })
   
+  output$fcfsWaiting <- renderTable({
+    df_fcfs$waiting
+  })
+  
   output$fcfsTerminated <- renderTable({
     df_fcfs$terminated
   })
@@ -77,7 +83,6 @@ server <- function(session, input, output) {
     pIDs <- 1:input$numProcesses
     arrivals <- sample(0:15, size = input$numProcesses, replace = TRUE)
     cpuBurst <- sample(2:30, size = input$numProcesses, replace = TRUE)
-    ioBurst <- sample(10:40, size = input$numProcesses, replace = TRUE)
     numEvents <- sample(2:5, size = input$numProcesses, replace = TRUE)
     waitTime <- rep(0, input$numProcesses)
     turnaround <- rep(0, input$numProcesses)
@@ -85,10 +90,14 @@ server <- function(session, input, output) {
     df_processes <- data.frame("Process ID" = pIDs,
                                "Arrival" = arrivals,
                                "CPU Burst Time" = cpuBurst,
-                               "Event Burst Time" = ioBurst,
                                "Number of Event Bursts" = numEvents,
+                               "Next Event Time" = 0,
+                               "Event Burst Time" = 0,
+                               "Last CPU Burst" = 0,
                                "Total Wait Time" = waitTime,
                                "Turnaround Time" = turnaround)
+    
+    df_processes <- GetNextIOEvent(df_processes, input$numProcesses)
     
     df_processes <- df_processes[order(df_processes$Arrival, decreasing = FALSE),] #sort by arrival time
     
@@ -96,36 +105,71 @@ server <- function(session, input, output) {
   }
   
   
-  UpdateSim <- function(df){
-    if(nrow(df$processes) > 0 && df$processes[1,"Arrival"] == clock$count){ # arrival time for next process
-      df_newProcs <- subset(df$processes, df$processes$Arrival == clock$count) # collect processes for current arrival time
-      df$readyQueue <- rbind(df$readyQueue, df_newProcs) # add to ready queue
-      df$processes <- df$processes[!(df$processes$Process.ID %in% df_newProcs$Process.ID),]  # remove from new process list
+  GetNextIOEvent <- function(df, rows){
+    
+    for(x in 1:rows){
+      if(df[x, "Number.of.Event.Bursts"] != 0){
+        df[x, "Event.Burst.Time"] <- sample(10:40, size = 1)
+        df[x, "Next.Event.Time"] <- sample(df[x, "Number.of.Event.Bursts"]:df[x, "CPU.Burst.Time"], size = 1)
+      }
     }
     
-    if(nrow(df$readyQueue) > 0){ 
-      if(nrow(df$running) == 0){
-        df$running <- rbind(df$running, df$readyQueue[1,])
-        df$readyQueue <- df$readyQueue[-c(1),]
-        
+    return(df)
+  }
+  
+  
+  UpdateSim <- function(df){
+    if(nrow(df$processes) > 0 && df$processes[1,"Arrival"] == clock$count){ # arrival time for next process
+      newProcs <- nrow(subset(df$processes, df$processes$Arrival == clock$count)) # collect row # for new processes
+      ChangeState(df, "readyQueue", "processes", c(1:newProcs)) # added row 1 to nrow
+    }
+    
+    if(nrow(df$readyQueue) > 0){ # processes in ready state
+      if(nrow(df$running) == 0){ # no process currently running
+        ChangeState(df, "running", "readyQueue", c(1))
+        df$running$Last.CPU.Burst <- 0
       }
       
       df$readyQueue$Total.Wait.Time <- df$readyQueue$Total.Wait.Time + 1
       df$readyQueue$Turnaround.Time <- df$readyQueue$Turnaround.Time + 1
     }
     
-    if(nrow(df$running) == 1){ 
-      df$running$CPU.Burst.Time <- df$running$CPU.Burst.Time - 1
-      df$running$Turnaround.Time <- df$running$Turnaround.Time + 1
+    if(nrow(df$running) == 1){ # process currently running
+      if(df$running$Number.of.Event.Bursts != 0 && df$running$Next.Event.Time == df$running$CPU.Burst.Time){ #processes has an IO burst
+        df$running[1,"Number.of.Event.Bursts"] <- df$running[1, "Number.of.Event.Bursts"] - 1
+        ChangeState(df, "waiting", "running", c(1))
+        df$waiting <- df$waiting[order(df$waiting$Event.Burst.Time, decreasing = FALSE),]
+      } else{
+        df$running$Last.CPU.Burst <- df$running$Last.CPU.Burst + 1
+        df$running$CPU.Burst.Time <- df$running$CPU.Burst.Time - 1
+        df$running$Turnaround.Time <- df$running$Turnaround.Time + 1
+        
+        if(df$running[1,"CPU.Burst.Time"] == 0){ # processes finishes running
+          ChangeState(df, "terminated", "running", c(1))
+        }
+      }
+    } else{ # wasted cpu time (for cpu utilization)
+      df$cpuIdleTime <- df$cpuIdleTime + 1
+    }
+    
+    if(nrow(df$waiting) > 0){ # processes in waiting state
+      df$waiting$Event.Burst.Time <- df$waiting$Event.Burst.Time - 1
       
-      if(df$running[1,"CPU.Burst.Time"] == 0){
-        df$terminated <- rbind(df$terminated, df$running[1,])
-        df$running <- df$running[-c(1),]
+      if(df$waiting[1, "Event.Burst.Time"] == 0){
+        ioComplete<- nrow(subset(df$waiting, df$waiting$Event.Burst.Time == 0))
+        df$waiting <- GetNextIOEvent(df$waiting, ioComplete)
+        ChangeState(df, "readyQueue", "waiting", c(1:ioComplete))
       }
     }
     
   }
   
+  
+  ChangeState <- function(df, df_to, df_from, processes){
+    
+    df[[df_to]] <- rbind(df[[df_to]], df[[df_from]][processes,])
+    df[[df_from]] <- df[[df_from]][-processes,] 
+  }
   
   # Input Validation --------------------------------------------
   
