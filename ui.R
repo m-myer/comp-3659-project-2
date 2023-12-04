@@ -124,6 +124,8 @@ ui <- fluidPage(
                                  
                                  titlePanel("Round Robin"),
                                  br(),
+                                 tableOutput("rrStats"),
+                                 hr(),
                                  tableOutput("rrSlice"),
                                  br(),
                                  br(),
