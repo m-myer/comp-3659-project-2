@@ -21,6 +21,15 @@ ui <- fluidPage(
                    placeholder = 'Please select an option below'),
                ),
                
+               numericInput(
+                 inputId = "seconds",
+                 label = "Clock Speed",
+                 value = 1000,
+                 min = 1,
+                 max = 1000,
+                 step = 100
+               ),
+               
                conditionalPanel(
                  condition = "input.schedulingChoices == 'Shortest Job First'",
                  
@@ -28,7 +37,36 @@ ui <- fluidPage(
                    inputId = "preemptive",
                    label = "Preemptive", 
                    value = FALSE
-                 )
+                 ),
+                 
+                 checkboxInput(
+                   inputId = "estimateSJF",
+                   label = "Use Exponential Averaging", 
+                   value = FALSE
+                 ),
+                 
+                 conditionalPanel(
+                   condition = "input.estimateSJF",
+                   
+                   numericInput(
+                     inputId = "alpha",
+                     label = "Elasticity Constant (\\( \\alpha \\))",
+                     value = 0.5,
+                     min = 0,
+                     max = 1,
+                     step = 0.1
+                   ),
+                   
+                   numericInput(
+                     inputId = "defaultEst",
+                     label = "Default Estimate",
+                     value = 10,
+                     min = 1,
+                     max = 20,
+                     step = 1
+                   ),
+                 ),
+                 
                ),
                
                conditionalPanel(
@@ -77,8 +115,16 @@ ui <- fluidPage(
                ),
                
                actionButton(
+                 inputId = "procGen", 
+                 label = "Generate New Process Batch"),
+               
+               actionButton(
                  inputId = "run", 
                  label = "Start"),
+               
+               actionButton(
+                 inputId = "reset", 
+                 label = "Reset"),
              ),
              
              mainPanel( # mainPanel ----
@@ -86,11 +132,29 @@ ui <- fluidPage(
                uiOutput("counter"),
                hr(),
                
+               br(),
+               h3("FCFS Stats"),
+               tableOutput("fcfsStats"),
+               br(),
+               h3("RR Stats"),
+               tableOutput("rrStats"),
+               br(),
+               h3("SJF Stats"),
+               tableOutput("sjfStats"),
+               br(),
+               h3("SJF Exp Stats"),
+               tableOutput("sjfExpStats"),
+               hr(),
+               tableOutput("processTable"),
+               br(),
+               hr(),
+               
                conditionalPanel( # FCFS ----
                  condition = "input.schedulingChoices == 'First Come First Serve'",
                  
                  titlePanel("First Come First Serve"),
                  br(),
+                 hr(),
                  br(),
                  h4("New Process List"),
                  br(),
@@ -123,8 +187,6 @@ ui <- fluidPage(
                                  condition = "input.schedulingChoices == 'Round Robin'",
                                  
                                  titlePanel("Round Robin"),
-                                 br(),
-                                 tableOutput("rrStats"),
                                  hr(),
                                  tableOutput("rrSlice"),
                                  br(),
@@ -160,8 +222,6 @@ ui <- fluidPage(
                                  condition = "input.schedulingChoices == 'Shortest Job First'",
                                  
                                  titlePanel("Shortest Job First"),
-                                 br(),
-                                 tableOutput("sjfStats"),
                                  hr(),
                                  br(),
                                  h4("New Process List"),
