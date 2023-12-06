@@ -17,21 +17,22 @@ ui <- fluidPage(
                              "Shortest Job First", 
                              "Round Robin", 
                              "Multilevel Queue"),
+                 multiple = TRUE,
                  options = list(
                    placeholder = 'Please select an option below'),
                ),
                
-               numericInput(
+               sliderInput(
                  inputId = "seconds",
                  label = "Clock Speed",
-                 value = 1000,
+                 value = 100,
                  min = 1,
                  max = 1000,
-                 step = 100
+                 ticks = FALSE
                ),
                
                conditionalPanel(
-                 condition = "input.schedulingChoices == 'Shortest Job First'",
+                 condition = "'Shortest Job First' %in% input.schedulingChoices",
                  
                  checkboxInput(
                    inputId = "preemptive",
@@ -70,7 +71,7 @@ ui <- fluidPage(
                ),
                
                conditionalPanel(
-                 condition = "input.schedulingChoices == 'Round Robin'",
+                 condition = "'Round Robin' %in% input.schedulingChoices",
                  
                  numericInput(
                    inputId = "timeQuantum",
@@ -90,41 +91,54 @@ ui <- fluidPage(
                  selected = "Random",
                  inline = TRUE
                ),
-               
-               
-               
-               radioButtons(
-                 inputId = "simType",
-                 label = strong("Simulation Type"),
-                 choices = list("Runtime",
-                                "Throughput"),
-                 selected = "Throughput",
-                 inline = TRUE
-               ),
-               
-               conditionalPanel(
-                 condition = "input.simType == 'Runtime'",
 
-                 numericInput(
-                   inputId = "runtime",
-                   label = strong("Simulation Runtime (in seconds?)"),
-                   value = NULL,
-                   min = 1,
-                   step = 1
-                 )
-               ),
-               
-               conditionalPanel(
-                 condition = "input.simType == 'Throughput'",
-
-                 numericInput(
+                 sliderInput(
                    inputId = "numProcesses",
                    label = strong("Total Number of Processes"),
-                   value = NULL,
+                   value = 10,
                    min = 1,
+                   max = 50,
+                   step = 1,
+                   ticks = FALSE
+                 ),
+                 
+                 numericInput(
+                   inputId = "cpuLambda",
+                   label = strong("CPU Burst length Distribution Mean"),
+                   value = 30,
+                   min = 1,
+                   max = 50,
                    step = 1
-                 )
-               ),
+                 ),
+                 
+                numericInput(
+                  inputId = "minEvents",
+                  label = strong("Minimum # of IO Bursts"),
+                  value = 0,
+                  min = 0,
+                  max = 10,
+                  step = 1
+                ),
+                 
+                 numericInput(
+                   inputId = "maxEvents",
+                   label = strong("Maximum # of IO Bursts"),
+                   value = 10,
+                   min = 0,
+                   max = 10,
+                   step = 1
+                 ),
+              
+                 
+                 numericInput(
+                   inputId = "ioLambda",
+                   label = strong("Event Burst length Distribution Mean"),
+                   value = 30,
+                   min = 1,
+                   max = 50,
+                   step = 1
+                 ),
+
                
                actionButton(
                  inputId = "procGen", 
@@ -137,11 +151,47 @@ ui <- fluidPage(
                actionButton(
                  inputId = "reset", 
                  label = "Reset"),
+               
+               actionButton(
+                 inputId = "resetStats", 
+                 label = "Reset Stats"),
              ),
              
              mainPanel( # mainPanel ----
                uiOutput("header"),
                uiOutput("counter"),
+               dropdownButton(
+                 tags$h3("Graph Options"),
+                 
+                 selectInput(inputId = 'graphs',
+                             label = 'Select one or more graphs',
+                             multiple = TRUE,
+                             choices = c("Average Wait Time",
+                                         "Average Turnaround Time"),
+                             selected = ""),
+                 
+                 circle = TRUE, status = "danger",
+                 icon = icon("chart-simple"), width = "300px",
+                 
+                 tooltip = tooltipOptions(title = "Click to see inputs !")
+               ),
+               tableOutput("statsTable"),
+               br(),
+               
+               conditionalPanel(
+                 condition = "'Average Wait Time' %in% input$graphs",
+
+                 plotOutput("waitPlot"),
+                 br(),
+               ),
+               
+               conditionalPanel(
+                 condition = "input.graphs.indexOf('Average Turnaround Time') != -1",
+                 
+                 plotOutput("ttPlot"),
+                 br(),
+               ),
+
                hr(),
                
                br(),
@@ -167,8 +217,16 @@ ui <- fluidPage(
                br(),
                hr(),
                
+               actionButton(
+                 inputId = "pause", 
+                 label = "Pause"),
+               
+               actionButton(
+                 inputId = "resume", 
+                 label = "Resume"),
+               
                conditionalPanel( # FCFS ----
-                 condition = "input.schedulingChoices == 'First Come First Serve'",
+                 condition = "'First Come First Serve' %in% input.schedulingChoices",
                  
                  titlePanel("First Come First Serve"),
                  br(),
@@ -202,7 +260,7 @@ ui <- fluidPage(
                ),
                
                conditionalPanel( # RR ----
-                                 condition = "input.schedulingChoices == 'Round Robin'",
+                                 condition = "'Round Robin' %in% input.schedulingChoices",
                                  
                                  titlePanel("Round Robin"),
                                  hr(),
@@ -237,7 +295,7 @@ ui <- fluidPage(
                ),
                
                conditionalPanel( # SJF ----
-                                 condition = "input.schedulingChoices == 'Shortest Job First'",
+                                 condition = "'Shortest Job First' %in% input.schedulingChoices",
                                  
                                  titlePanel("Shortest Job First"),
                                  hr(),

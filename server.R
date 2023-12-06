@@ -14,6 +14,18 @@ server <- function(session, input, output) {
                                  eventTimes = data.frame(),
                                  eventLengths = data.frame())
   
+  df_stats <- reactiveValues(statsTable = matrix(0,
+                                                 ncol = 7, 
+                                                 nrow = 6,
+                                                 dimnames = list(algorithms, 
+                                                                 c("Average Wait Time",
+                                                                   "Median Wait Time",
+                                                                   "Average Turnaround Time",
+                                                                   "Median Turnaround Time",
+                                                                   "CPU Utilization",
+                                                                   "Average Response Time",
+                                                                   "Throughput"))))
+  
   # First Come First Serve Object
   df_fcfs <- reactiveValues(new = data.frame(),
                             readyQueue = data.frame(),
@@ -21,10 +33,7 @@ server <- function(session, input, output) {
                             waiting = data.frame(),
                             terminated = data.frame(),
                             cpuIdleTime = 0,
-                            avgWaitTime = 0,
-                            avgTurnaround = 0,
-                            responsive = 0,
-                            cpuUtil = 0)
+                            algorithmNum = 1)
   
   # Round Robin Object
   df_rr <- reactiveValues(new = data.frame(),
@@ -35,10 +44,7 @@ server <- function(session, input, output) {
                           quantum = 0,
                           timeSlice = 0,
                           cpuIdleTime = 0,
-                          avgWaitTime = 0,
-                          avgTurnaround = 0,
-                          responsive = 0,
-                          cpuUtil = 0)
+                          algorithmNum = 2)
   
   # Shortest Job First Object
   df_sjf <- reactiveValues(new = data.frame(),
@@ -47,32 +53,23 @@ server <- function(session, input, output) {
                            waiting = data.frame(),
                            terminated = data.frame(),
                            cpuIdleTime = 0,
-                           avgWaitTime = 0,
-                           avgTurnaround = 0,
-                           responsive = 0,
-                           cpuUtil = 0)
+                           algorithmNum = 3)
   
   df_sjfexp <- reactiveValues(new = data.frame(),
-                              readyQueue = data.frame(),
-                           running = data.frame(),
-                           waiting = data.frame(),
-                           terminated = data.frame(),
-                           cpuIdleTime = 0,
-                           avgWaitTime = 0,
-                           avgTurnaround = 0,
-                           responsive = 0,
-                           cpuUtil = 0)
-  
-  df_srtf <- reactiveValues(new = data.frame(),
                               readyQueue = data.frame(),
                               running = data.frame(),
                               waiting = data.frame(),
                               terminated = data.frame(),
                               cpuIdleTime = 0,
-                              avgWaitTime = 0,
-                              avgTurnaround = 0,
-                              responsive = 0,
-                              cpuUtil = 0)
+                              algorithmNum = 4)
+  
+  df_srtf <- reactiveValues(new = data.frame(),
+                            readyQueue = data.frame(),
+                            running = data.frame(),
+                            waiting = data.frame(),
+                            terminated = data.frame(),
+                            cpuIdleTime = 0,
+                            algorithmNum = 5)
   
   df_srtfexp <- reactiveValues(new = data.frame(),
                               readyQueue = data.frame(),
@@ -80,10 +77,7 @@ server <- function(session, input, output) {
                               waiting = data.frame(),
                               terminated = data.frame(),
                               cpuIdleTime = 0,
-                              avgWaitTime = 0,
-                              avgTurnaround = 0,
-                              responsive = 0,
-                              cpuUtil = 0)
+                              algorithmNum = 6)
   
   
   
@@ -92,6 +86,10 @@ server <- function(session, input, output) {
   #                     ---- Observers ----
   #
   # ----------------------------------------------------------- #
+  
+  observeEvent(input$graphs, {
+    print(which("Average Wait Time" %in% input$graphs))
+  })
   
   observeEvent(input$procGen, {
     req(iv$is_valid())
@@ -105,16 +103,16 @@ server <- function(session, input, output) {
     
     # df_processes(SpawnProcesses())
     
-    if(input$schedulingChoices == "First Come First Serve"){
+    if("First Come First Serve" %in% input$schedulingChoices){
       df_fcfs$new <- df_processes$processes
     }
     
-    if(input$schedulingChoices == "Round Robin"){
+    if("Round Robin" %in% input$schedulingChoices){
       df_rr$new <- df_processes$processes
       df_rr$quantum <- input$timeQuantum
     }
     
-    if(input$schedulingChoices == "Shortest Job First"){
+    if("Shortest Job First" %in% input$schedulingChoices){
       df_sjf$new <- df_processes$processes
       df_sjfexp$new <- df_processes$processes
       df_srtf$new <- df_processes$processes
@@ -135,8 +133,16 @@ server <- function(session, input, output) {
     clock$count <- clock$count + 1
   })
   
+  observeEvent(input$pause, {
+    clock$active <- FALSE
+  })
   
-  observeEvent(req(input$schedulingChoices == "First Come First Serve" && clock$count), { # every clock tick
+  observeEvent(input$resume, {
+    clock$active <- TRUE
+  })
+  
+  
+  observeEvent(req("First Come First Serve" %in% input$schedulingChoices && clock$count), { # every clock tick
     req(clock$active) # only if simulation is running
     
     RunFCFS(df_fcfs)
@@ -148,7 +154,7 @@ server <- function(session, input, output) {
   })
   
   
-  observeEvent(req(input$schedulingChoices == "Round Robin" && clock$count), { # every clock tick
+  observeEvent(req("Round Robin" %in% input$schedulingChoices && clock$count), { # every clock tick
     req(clock$active) # only if simulation is running
     
     RunRR(df_rr)
@@ -160,7 +166,7 @@ server <- function(session, input, output) {
   })
   
   
-  observeEvent(req(input$schedulingChoices == "Shortest Job First" && clock$count), { # every clock tick
+  observeEvent(req("Shortest Job First" %in% input$schedulingChoices && clock$count), { # every clock tick
     req(clock$active) # only if simulation is running
 
     RunSJF(GetSJF())
@@ -177,135 +183,196 @@ server <- function(session, input, output) {
     ResetSim()
     shinyjs::reset("schedulingChoices")
   })
+  
+  observeEvent(input$resetStats, {
+    ResetStats()
+  })
 
   
   # ----------------------------------------------------------- #
   #
-  #                      ---- Outputs ----
+   #                      ---- Outputs ----
   #
   # ----------------------------------------------------------- #
-  
-  output$header <- renderUI({
-    tagList(
-      h3(paste("Selected Algorithm: ", input$schedulingChoices))
-    )
-  })
   
   output$counter <- renderUI({
     sprintf("Timer: %s",
             clock$count)
   })
   
+  output$statsTable <- renderTable({
+    df_stats$statsTable
+  })
+  
+  output$waitPlot <- renderPlot({
+    df <- data.frame(stat = df_stats$statsTable[,"Average Wait Time"],
+                     algo = c(""))
+    ggplot(
+      data=df, aes(x=algorithms, y=stat)) +
+      geom_bar(stat="identity") +
+      labs(title="Average Wait Time", y="Wait time (in clock ticks)", x="Algorithm") +
+      theme(
+        title = element_text(size=22, hjust = 0.5),
+        axis.title.x=element_text(size=18, vjust=-0.4),  # X axis title
+        axis.title.y=element_text(size=18),  # Y axis title
+        axis.text.x=element_text(size=14),  # X axis text
+        axis.text.y=element_text(size=14)) +
+      coord_cartesian(clip="off") 
+  })
+  
+  output$ttPlot <- renderPlot({
+    df <- data.frame(stat = df_stats$statsTable[,"Average Turnaround Time"],
+                     algo = c(""))
+    ggplot(
+      data=df, aes(x=algorithms, y=stat)) +
+      geom_bar(stat="identity") +
+      labs(title="Average Turnaround Time", y="Turnaround time (in clock ticks)", x="Algorithm") +
+      theme(
+        title = element_text(size=22, hjust = 0.5),
+        axis.title.x=element_text(size=18, vjust=-0.4),  # X axis title
+        axis.title.y=element_text(size=18),  # Y axis title
+        axis.text.x=element_text(size=14),  # X axis text
+        axis.text.y=element_text(size=14)) +
+      coord_cartesian(clip="off") 
+  })
+  
   # First Come First Serve
   output$fcfsStats <- renderTable({
     data.frame("Average Wait Time" = df_fcfs$avgWaitTime,
+               "Median Wait Time" = df_fcfs$medWaitTime,
                "Average Turnaround Time" = df_fcfs$avgTurnaround,
+               "Median Turnaround Time" = df_fcfs$medTurnaround,
                "CPU Utitization (%)" = df_fcfs$cpuUtil,
-               "Average Responsiveness" = df_fcfs$responsive)
+               "Average Responsiveness" = df_fcfs$responsive,
+               "Throughput" = df_fcfs$throughput)
   })
   
+  # FCFS ----
   output$fcfsNew <- renderTable({
-    df_fcfs$new
+    GetAlgoOutput(df_fcfs$new)
   })
   
   output$fcfsReady <- renderTable({
-    df_fcfs$readyQueue
+    GetAlgoOutput(df_fcfs$readyQueue)
   })
   
   output$fcfsRunning <- renderTable({
-    df_fcfs$running
+    GetAlgoOutput(df_fcfs$running)
   })
   
   output$fcfsWaiting <- renderTable({
-    df_fcfs$waiting
+    GetAlgoOutput(df_fcfs$waiting)
   })
   
   output$fcfsTerminated <- renderTable({
-    df_fcfs$terminated
+    GetAlgoOutput(df_fcfs$terminated)
   })
   
   
-  # Round Robin
+  # Round Robin ----
   output$rrSlice <- renderTable({
     c(df_rr$timeSlice, df_rr$quantum)
   })
   
   output$rrStats <- renderTable({
     data.frame("Average Wait Time" = df_rr$avgWaitTime,
+               "Median Wait Time" = df_rr$medWaitTime,
                "Average Turnaround Time" = df_rr$avgTurnaround,
+               "Median Turnaround Time" = df_rr$medTurnaround,
                "CPU Utitization (%)" = df_rr$cpuUtil,
-               "Average Responsiveness" = df_rr$responsive)
+               "Average Responsiveness" = df_rr$responsive,
+               "Throughput" = df_rr$throughput)
   })
   
   output$rrNew <- renderTable({
-    df_rr$new
+    GetAlgoOutput(df_rr$new)
   })
   
   output$rrReady <- renderTable({
-    df_rr$readyQueue
+    GetAlgoOutput(df_rr$readyQueue)
   })
   
   output$rrRunning <- renderTable({
-    df_rr$running
+    GetAlgoOutput(df_rr$running)
   })
   
   output$rrWaiting <- renderTable({
-    df_rr$waiting
+    GetAlgoOutput(df_rr$waiting)
   })
   
   output$rrTerminated <- renderTable({
-    df_rr$terminated
+    GetAlgoOutput(df_rr$terminated)
   })
   
   
-  # Shortest Job First
+  # Shortest Job First ----
   output$sjfStats <- renderTable({
     data.frame("Average Wait Time" = df_sjf$avgWaitTime,
+               "Median Wait Time" = df_sjf$medTurnaround,
                "Average Turnaround Time" = df_sjf$avgTurnaround,
+               "Median Turnaround Time" = df_sjf$medTurnaround,
                "CPU Utitization (%)" = df_sjf$cpuUtil,
-               "Average Responsiveness" = df_sjf$responsive)
+               "Average Responsiveness" = df_sjf$responsive,
+               "Throughput" = df_sjf$throughput)
   })
   
   output$sjfExpStats <- renderTable({
     data.frame("Average Wait Time" = df_sjfexp$avgWaitTime,
+               "Median Wait Time" = df_sjfexp$medTurnaround,
                "Average Turnaround Time" = df_sjfexp$avgTurnaround,
+               "Median Turnaround Time" = df_sjfexp$medTurnaround,
                "CPU Utitization (%)" = df_sjfexp$cpuUtil,
-               "Average Responsiveness" = df_sjfexp$responsive)
+               "Average Responsiveness" = df_sjfexp$responsive,
+               "Throughput" = df_sjfexp$throughput)
   })
   
   output$srtfStats <- renderTable({
     data.frame("Average Wait Time" = df_srtf$avgWaitTime,
+               "Median Wait Time" = df_srtf$medTurnaround,
                "Average Turnaround Time" = df_srtf$avgTurnaround,
+               "Median Turnaround Time" = df_srtf$medTurnaround,
                "CPU Utitization (%)" = df_srtf$cpuUtil,
-               "Average Responsiveness" = df_srtf$responsive)
+               "Average Responsiveness" = df_srtf$responsive,
+               "Throughput" = df_srtf$throughput)
   })
   
   output$srtfExpStats <- renderTable({
     data.frame("Average Wait Time" = df_srtfexp$avgWaitTime,
+               "Median Wait Time" = df_srtfexp$medTurnaround,
                "Average Turnaround Time" = df_srtfexp$avgTurnaround,
+               "Median Turnaround Time" = df_srtfexp$medTurnaround,
                "CPU Utitization (%)" = df_srtfexp$cpuUtil,
-               "Average Responsiveness" = df_srtfexp$responsive)
+               "Average Responsiveness" = df_srtfexp$responsive,
+               "Throughput" = df_srtfexp$throughput)
   })
   
   output$sjfNew <- renderTable({
-    GetSJF()$new
+    GetAlgoOutput(GetSJF()$new)
   })
   
   output$sjfReady <- renderTable({
-    GetSJF()$readyQueue
+    GetAlgoOutput(GetSJF()$readyQueue)
   })
   
   output$sjfRunning <- renderTable({
-    GetSJF()$running
+    GetAlgoOutput(GetSJF()$running)
+    
   })
   
   output$sjfWaiting <- renderTable({
-    GetSJF()$waiting
+    GetAlgoOutput(GetSJF()$waiting)
+    
   })
   
   output$sjfTerminated <- renderTable({
-    GetSJF()$terminated
+    GetAlgoOutput(GetSJF()$terminated)
+    
   })
+  
+  
+  
+  
+  
   
   output$processTable <- renderTable({
      df_processes$eventTimes
@@ -321,9 +388,9 @@ server <- function(session, input, output) {
   SpawnProcesses <- function(df){
     
     pIDs <- 1:input$numProcesses
-    arrivals <- sample(1:15, size = input$numProcesses, replace = TRUE)
-    cpuTime <- sample(10:30, size = input$numProcesses, replace = TRUE)
-    numEvents <- sample(0:5, size = input$numProcesses, replace = TRUE)
+    arrivals <- sample(1:input$numProcesses, size = input$numProcesses, replace = TRUE)
+    cpuTime <- sample(rpois(input$numProcesses, input$cpuLambda), size = input$numProcesses, replace = FALSE)
+    numEvents <- sample(input$minEvents:input$maxEvents, size = input$numProcesses, replace = TRUE)
     
     df$processes <- data.frame("Process ID" = pIDs,
                                "Arrival" = arrivals,
@@ -357,7 +424,7 @@ server <- function(session, input, output) {
           df_eventTimes[x,1] <- sample(numEvents[x]:cpuTime[x], size = 1) # random
         }
         
-        df_eventLengths[x, 1] <- sample(10:40, size = 1)
+        df_eventLengths[x, 1] <- sample(rpois(input$numProcesses, input$ioLambda), size = 1)
         
         if(numEvents[x] > 1){
           for(y in 2:ioCols){
@@ -370,7 +437,7 @@ server <- function(session, input, output) {
                 df_eventTimes[x,y] <- sample((numEvents[x] - (y - 1)):df_eventTimes[x,y-1], size = 1) # random
               }
 
-              df_eventLengths[x, y] <- sample(10:40, size = 1)
+              df_eventLengths[x, y] <- sample(input$numProcesses, input$ioLambda, size = 1)
             }
           }
         }
@@ -603,7 +670,7 @@ server <- function(session, input, output) {
     
     df$running$Response.Time <- df$running$Response.Time / df$running$Total.CPU.Bursts
     ChangeState(df, "terminated", "running", c(1))
-    UpdateStats(df)
+    UpdateStats(df, df$algorithmNum)
   }
   
   
@@ -626,11 +693,15 @@ server <- function(session, input, output) {
   }
   
   
-  UpdateStats <- function(df){
-    df$avgWaitTime <- mean(df$terminated$Total.Wait.Time)
-    df$avgTurnaround <- mean(df$terminated$Turnaround.Time)
-    df$cpuUtil <- (1 - (df$cpuIdleTime / clock$count)) * 100
-    df$responsive <- mean(df$terminated$Response.Time)
+  UpdateStats <- function(df, rowNum){
+
+    df_stats$statsTable[rowNum,"Average Wait Time"] <- mean(df$terminated$Total.Wait.Time)
+    df_stats$statsTable[rowNum,"Median Wait Time"] <- median(df$terminated$Total.Wait.Time)
+    df_stats$statsTable[rowNum,"Average Turnaround Time"] <- mean(df$terminated$Turnaround.Time)
+    df_stats$statsTable[rowNum,"Median Turnaround Time"] <- median(df$terminated$Turnaround.Time)
+    df_stats$statsTable[rowNum,"CPU Utilization"] <- (1 - (df$cpuIdleTime / clock$count)) * 100
+    df_stats$statsTable[rowNum,"Average Response Time"] <- mean(df$terminated$Response.Time)
+    df_stats$statsTable[rowNum,"Throughput"]<- (sum(df$terminated$Total.CPU.Bursts) / clock$count) * 100
   }
   
   ResetSim <- function(){
@@ -646,6 +717,15 @@ server <- function(session, input, output) {
     
   }
   
+  ResetStats <- function(){
+    ClearStats(df_fcfs)
+    ClearStats(df_rr)
+    ClearStats(df_sjf)
+    ClearStats(df_sjfexp)
+    ClearStats(df_srtf)
+    ClearStats(df_srtfexp)
+  }
+  
   ClearQueues <- function(df){
     
     df$new <- data.frame()
@@ -654,6 +734,18 @@ server <- function(session, input, output) {
     df$waiting <- data.frame()
     df$terminated <- data.frame()
     df$cpuIdleTime <- 0
+  }
+  
+  ClearStats <- function(df){
+    
+    df$cpuIdleTime <- 0
+    df$avgWaitTime <- 0
+    df$medWaitTime <- 0
+    df$avgTurnaround <- 0
+    df$medTurnaround <- 0
+    df$responsive <- 0
+    df$cpuUtil <- 0
+    df$throughput <- 0
   }
   
   GetSJF <- function(){
@@ -673,6 +765,20 @@ server <- function(session, input, output) {
   }
   
   
+  GetAlgoOutput <- function(df){
+    
+    drop <- c("Current.Event.Burst", "New.CPU.Burst", "Last.CPU.Runtime")
+    df_new <- df[, !(names(df) %in% drop)]
+    
+    if(!input$estimateSJF){
+      dropEst <- c("Next.CPU.Estimate")
+      df_new <- df_new[, !(names(df_new) %in% dropEst)]
+    }
+    
+    return(df_new)
+  }
+  
+  
   # ----------------------------------------------------------- #
   #
   #                 ---- Input Validation ----
@@ -682,6 +788,7 @@ server <- function(session, input, output) {
   iv <- InputValidator$new()
   
   iv$add_rule("numProcesses", sv_required())
+  # iv$add_rule("numProcesses", sv_)
   
   iv$enable()
   
