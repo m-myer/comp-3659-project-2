@@ -6,7 +6,7 @@ ui <- fluidPage(
            sidebarLayout( 
              sidebarPanel( # sidebar ----
                withMathJax(),
-               useShinyjs(),
+               shinyjs::useShinyjs(),
                id = "sidebar",
                
                selectizeInput(
@@ -32,7 +32,7 @@ ui <- fluidPage(
                ),
                
                conditionalPanel(
-                 condition = "'Shortest Job First' %in% input.schedulingChoices",
+                 condition = "input.schedulingChoices.indexOf('Shortest Job First') > -1",
                  
                  checkboxInput(
                    inputId = "preemptive",
@@ -71,7 +71,7 @@ ui <- fluidPage(
                ),
                
                conditionalPanel(
-                 condition = "'Round Robin' %in% input.schedulingChoices",
+                 condition = "input.schedulingChoices.indexOf('Round Robin') > -1",
                  
                  numericInput(
                    inputId = "timeQuantum",
@@ -155,42 +155,52 @@ ui <- fluidPage(
                actionButton(
                  inputId = "resetStats", 
                  label = "Reset Stats"),
-             ),
-             
-             mainPanel( # mainPanel ----
-               uiOutput("header"),
-               uiOutput("counter"),
+               
                dropdownButton(
                  tags$h3("Graph Options"),
                  
-                 selectInput(inputId = 'graphs',
-                             label = 'Select one or more graphs',
-                             multiple = TRUE,
-                             choices = c("Average Wait Time",
-                                         "Average Turnaround Time"),
-                             selected = ""),
+                 selectizeInput(inputId = 'graphs',
+                                label = 'Select one or more graphs',
+                                multiple = TRUE,
+                                choices = c("Average Wait Time",
+                                            "Average Turnaround Time"),
+                                selected = ""),
                  
                  circle = TRUE, status = "danger",
                  icon = icon("chart-simple"), width = "300px",
                  
                  tooltip = tooltipOptions(title = "Click to see inputs !")
                ),
+             ),
+             
+             mainPanel( # mainPanel ----
+               useShinyjs(),
+               uiOutput("header"),
+               uiOutput("counter"),
+               
+               
                tableOutput("statsTable"),
                br(),
-               
                conditionalPanel(
-                 condition = "'Average Wait Time' %in% input$graphs",
-
+                 condition = "input.graphs.indexOf('Average Wait Time') > -1",
+                 
                  plotOutput("waitPlot"),
                  br(),
                ),
                
                conditionalPanel(
-                 condition = "input.graphs.indexOf('Average Turnaround Time') != -1",
+                 condition = "input.graphs.indexOf('Average Turnaround Time') > -1",
                  
                  plotOutput("ttPlot"),
                  br(),
                ),
+               
+               # conditionalPanel(
+               #   condition = "input.graphs.indexOf('Average Wait Time') > -1",
+               #   
+               #   plotOutput("ttPlot"),
+               #   br(),
+               # ),
 
                hr(),
                
@@ -226,7 +236,7 @@ ui <- fluidPage(
                  label = "Resume"),
                
                conditionalPanel( # FCFS ----
-                 condition = "'First Come First Serve' %in% input.schedulingChoices",
+                 condition = "input.schedulingChoices.indexOf('First Come First Serve')",
                  
                  titlePanel("First Come First Serve"),
                  br(),

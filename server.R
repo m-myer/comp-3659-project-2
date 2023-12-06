@@ -88,7 +88,7 @@ server <- function(session, input, output) {
   # ----------------------------------------------------------- #
   
   observeEvent(input$graphs, {
-    print(which("Average Wait Time" %in% input$graphs))
+    print(identical(which("Average Wait Time" %in% input$graphs), integer(0)))
   })
   
   observeEvent(input$procGen, {
