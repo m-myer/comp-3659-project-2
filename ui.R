@@ -81,6 +81,18 @@ ui <- fluidPage(
                  )
                ), #RR Conditional Panel
                
+               
+               radioButtons(
+                 inputId = "eventSkew",
+                 label = strong("Distribution of IO Bursts"),
+                 choices = list("Random",
+                                "Even"),
+                 selected = "Random",
+                 inline = TRUE
+               ),
+               
+               
+               
                radioButtons(
                  inputId = "simType",
                  label = strong("Simulation Type"),
@@ -144,6 +156,12 @@ ui <- fluidPage(
                br(),
                h3("SJF Exp Stats"),
                tableOutput("sjfExpStats"),
+               br(),
+               h3("SRTF Stats"),
+               tableOutput("srtfStats"),
+               br(),
+               h3("SRTF Exp Stats"),
+               tableOutput("srtfExpStats"),
                hr(),
                tableOutput("processTable"),
                br(),
@@ -218,7 +236,7 @@ ui <- fluidPage(
                                  br(),
                ),
                
-               conditionalPanel( # RR ----
+               conditionalPanel( # SJF ----
                                  condition = "input.schedulingChoices == 'Shortest Job First'",
                                  
                                  titlePanel("Shortest Job First"),

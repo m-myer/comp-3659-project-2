@@ -63,6 +63,28 @@ server <- function(session, input, output) {
                            responsive = 0,
                            cpuUtil = 0)
   
+  df_srtf <- reactiveValues(new = data.frame(),
+                              readyQueue = data.frame(),
+                              running = data.frame(),
+                              waiting = data.frame(),
+                              terminated = data.frame(),
+                              cpuIdleTime = 0,
+                              avgWaitTime = 0,
+                              avgTurnaround = 0,
+                              responsive = 0,
+                              cpuUtil = 0)
+  
+  df_srtfexp <- reactiveValues(new = data.frame(),
+                              readyQueue = data.frame(),
+                              running = data.frame(),
+                              waiting = data.frame(),
+                              terminated = data.frame(),
+                              cpuIdleTime = 0,
+                              avgWaitTime = 0,
+                              avgTurnaround = 0,
+                              responsive = 0,
+                              cpuUtil = 0)
+  
   
   
   # ----------------------------------------------------------- #
@@ -95,6 +117,9 @@ server <- function(session, input, output) {
     if(input$schedulingChoices == "Shortest Job First"){
       df_sjf$new <- df_processes$processes
       df_sjfexp$new <- df_processes$processes
+      df_srtf$new <- df_processes$processes
+      df_srtfexp$new <- df_processes$processes
+      
     }
     
     clock$count <- -3
@@ -138,14 +163,10 @@ server <- function(session, input, output) {
   observeEvent(req(input$schedulingChoices == "Shortest Job First" && clock$count), { # every clock tick
     req(clock$active) # only if simulation is running
 
-    if(input$estimateSJF){
-      RunSJF(df_sjfexp)
-    } else{
-      RunSJF(df_sjf)
-    }
+    RunSJF(GetSJF())
     
 
-    if(nrow(df_sjf$terminated) == input$numProcesses){
+    if(nrow(GetSJF()$terminated) == input$numProcesses){
       clock$active <- FALSE
       clock$timer <- reactiveTimer(Inf)
     }
@@ -252,24 +273,38 @@ server <- function(session, input, output) {
                "Average Responsiveness" = df_sjfexp$responsive)
   })
   
+  output$srtfStats <- renderTable({
+    data.frame("Average Wait Time" = df_srtf$avgWaitTime,
+               "Average Turnaround Time" = df_srtf$avgTurnaround,
+               "CPU Utitization (%)" = df_srtf$cpuUtil,
+               "Average Responsiveness" = df_srtf$responsive)
+  })
+  
+  output$srtfExpStats <- renderTable({
+    data.frame("Average Wait Time" = df_srtfexp$avgWaitTime,
+               "Average Turnaround Time" = df_srtfexp$avgTurnaround,
+               "CPU Utitization (%)" = df_srtfexp$cpuUtil,
+               "Average Responsiveness" = df_srtfexp$responsive)
+  })
+  
   output$sjfNew <- renderTable({
-    df_sjf$new
+    GetSJF()$new
   })
   
   output$sjfReady <- renderTable({
-    df_sjf$readyQueue
+    GetSJF()$readyQueue
   })
   
   output$sjfRunning <- renderTable({
-    df_sjf$running
+    GetSJF()$running
   })
   
   output$sjfWaiting <- renderTable({
-    df_sjf$waiting
+    GetSJF()$waiting
   })
   
   output$sjfTerminated <- renderTable({
-    df_sjf$terminated
+    GetSJF()$terminated
   })
   
   output$processTable <- renderTable({
@@ -292,7 +327,8 @@ server <- function(session, input, output) {
     
     df$processes <- data.frame("Process ID" = pIDs,
                                "Arrival" = arrivals,
-                               "CPU Runtime" = cpuTime,
+                               "Total CPU Runtime" = cpuTime,
+                               "Next CPU Runtime" = 0,
                                "Total Event Bursts" = numEvents,
                                "Current Event Burst" = 1,
                                "Next Event Time" = 0,
@@ -300,7 +336,6 @@ server <- function(session, input, output) {
                                "New CPU Burst" = FALSE,
                                "Total CPU Bursts" = numEvents + 1,
                                "Last CPU Runtime" = 0,
-                               "Next CPU Runtime" = 0,
                                "Next CPU Estimate" = 0,
                                "Response Time" = 0,
                                "Total Wait Time" = 0,
@@ -314,26 +349,34 @@ server <- function(session, input, output) {
     divisor <- floor(cpuTime /(numEvents + 1))
     
     for(x in 1:input$numProcesses){
-      print(numEvents[x])
       if(numEvents[x] != 0){
-        df_eventTimes[x,1] <- sample(numEvents[x]:cpuTime[x], size = 1)
         
-        # df_eventTimes[x,1] <- cpuTime[x] - divisor[x]
+        if(input$eventSkew == "even"){
+          df_eventTimes[x,1] <- cpuTime[x] - divisor[x] # even
+        } else {
+          df_eventTimes[x,1] <- sample(numEvents[x]:cpuTime[x], size = 1) # random
+        }
+        
         df_eventLengths[x, 1] <- sample(10:40, size = 1)
         
         if(numEvents[x] > 1){
           for(y in 2:ioCols){
             
             if(y <= numEvents[x]){
-              df_eventTimes[x,y] <- sample((numEvents[x] - (y - 1)):df_eventTimes[x,y-1], size = 1)
-              # df_eventTimes[x,y] <- df_eventTimes[x,y-1] - divisor[x]
+              
+              if(input$eventSkew == "even"){
+                df_eventTimes[x,y] <- df_eventTimes[x,y-1] - divisor[x] # even
+              } else{
+                df_eventTimes[x,y] <- sample((numEvents[x] - (y - 1)):df_eventTimes[x,y-1], size = 1) # random
+              }
+
               df_eventLengths[x, y] <- sample(10:40, size = 1)
             }
           }
         }
-        
       }
     }
+    
     df$eventTimes <- df_eventTimes
     df$eventLengths <- df_eventLengths
     df$processes <- GetNextIOEvent(df$processes, input$numProcesses)
@@ -347,13 +390,16 @@ server <- function(session, input, output) {
     
     for(x in 1:rows){
       if(df[x, "Total.Event.Bursts"] != 0){
-        # df[x, "Event.Burst.Length"] <- sample(10:40, size = 1)
-        # df[x, "Next.Event.Time"] <- sample(df[x, "Total.Event.Bursts"]:df[x, "CPU.Runtime"], size = 1)
         df[x, "Next.Event.Time"] <- df_processes$eventTimes[df[x, "Process.ID"], df[x, "Current.Event.Burst"]]
         df[x, "Event.Burst.Length"] <- df_processes$eventLengths[df[x, "Process.ID"], df[x, "Current.Event.Burst"]]
-        df[x, "Next.CPU.Runtime"] <- df[x, "CPU.Runtime"] - df[x, "Next.Event.Time"]
         df[x, "Next.CPU.Estimate"] <- ComputeEstimate(df[x, "Next.CPU.Estimate"], df[x, "Last.CPU.Runtime"])
+      } else {
+        df[x, "Next.Event.Time"] <- 0
       }
+      
+      df[x, "Next.CPU.Runtime"] <- df[x, "Total.CPU.Runtime"] - df[x, "Next.Event.Time"]
+      
+      
     }
     
     return(df)
@@ -368,12 +414,12 @@ server <- function(session, input, output) {
     CheckFCFSRunning(df)
     
     if(nrow(df$running) == 1){ # process currently running
-      if(df$running$Total.Event.Bursts != 0 && df$running$Next.Event.Time >= df$running$CPU.Runtime){ #processes has an IO burst
+      if(df$running$Total.Event.Bursts != 0 && df$running$Next.Event.Time >= df$running$Total.CPU.Runtime){ #processes has an IO burst
         HandleIOBurst(df)
       } else{
         ChangeCPUCounters(df)
         
-        if(df$running[1,"CPU.Runtime"] <= 0){ # processes finishes running
+        if(df$running[1,"Total.CPU.Runtime"] <= 0){ # processes finishes running
           TerminateProcess(df)
         }
       }
@@ -390,7 +436,7 @@ server <- function(session, input, output) {
     CheckReadyQueue(df)
     
     if(nrow(df$running) == 1){ # process currently running
-      if(df$running$Total.Event.Bursts != 0 && df$running$Next.Event.Time >= df$running$CPU.Runtime){ #processes has an IO burst
+      if(df$running$Total.Event.Bursts != 0 && df$running$Next.Event.Time >= df$running$Total.CPU.Runtime){ #processes has an IO burst
         HandleIOBurst(df)
         df$timeSlice <- 0
       } else{
@@ -401,7 +447,7 @@ server <- function(session, input, output) {
           ChangeState(df, "readyQueue", "running", c(1))
           df$timeSlice <- 0
           
-        } else if(df$running[1,"CPU.Runtime"] <= 0){ # processes finishes running
+        } else if(df$running[1,"Total.CPU.Runtime"] <= 0){ # processes finishes running
           TerminateProcess(df)
           df$timeSlice <- 0
         }
@@ -416,22 +462,29 @@ server <- function(session, input, output) {
 
     CheckNewProcesses(df)
     CheckWaiting(df)
-    if(nrow(df$readyQueue) > 0){
+    
+    if(nrow(df$readyQueue) > 0){ # sort by estimate or actual
       if(input$estimateSJF){
         df$readyQueue <- df$readyQueue[order(df$readyQueue$Next.CPU.Estimate, decreasing = FALSE),]
       } else{
         df$readyQueue <- df$readyQueue[order(df$readyQueue$Next.CPU.Runtime, decreasing = FALSE),]
       }
     }
-    CheckReadyQueue(df)
+
+    if(input$preemptive){
+      CheckPreemptiveReadyQueue(df)
+    } else{
+      CheckReadyQueue(df)
+    }
+    
     
     if(nrow(df$running) == 1){ # process currently running
-      if(df$running$Total.Event.Bursts != 0 && df$running$Next.Event.Time >= df$running$CPU.Runtime){ #processes has an IO burst
+      if(df$running$Total.Event.Bursts != 0 && df$running$Next.Event.Time >= df$running$Total.CPU.Runtime){ #processes has an IO burst
         HandleIOBurst(df)
       } else{
         ChangeCPUCounters(df)
         
-        if(df$running[1,"CPU.Runtime"] <= 0){ # processes finishes running
+        if(df$running[1,"Total.CPU.Runtime"] <= 0){ # processes finishes running
           TerminateProcess(df)
         }
       }
@@ -453,7 +506,11 @@ server <- function(session, input, output) {
     if(nrow(df$new) > 0 && df$new[1,"Arrival"] <= clock$count){ # arrival time for next process
       newProcs <- nrow(subset(df$new, df$new$Arrival == clock$count)) # collect row # for new processes
       df$new[c(1:newProcs),]$New.CPU.Burst <- TRUE
+      for(x in 1:newProcs){
+        df$new[x,"Next.CPU.Runtime"] <- df$new[x,"Total.CPU.Runtime"] - df$new[x,"Next.Event.Time"]
+      }
       ChangeState(df, "readyQueue", "new", c(1:newProcs)) # added row 1 to nrow
+      
     }
   }
   
@@ -471,6 +528,37 @@ server <- function(session, input, output) {
       df$readyQueue$Turnaround.Time <- df$readyQueue$Turnaround.Time + 1
     }
   }
+  
+  
+  CheckPreemptiveReadyQueue <- function(df){
+    
+    if(nrow(df$readyQueue) > 0){ # processes in ready state
+      
+      if(nrow(df$running) == 0){ # no process currently running
+        ChangeState(df, "running", "readyQueue", c(1))
+        df$running$New.CPU.Burst <- FALSE
+        df$running$Last.CPU.Runtime <- 0
+      
+      } else if(input$estimateSJF && df$running[1,"Next.CPU.Estimate"] > df$readyQueue[1, "Next.CPU.Estimate"]){ # preempt with estimate
+          ChangeState(df, "readyQueue", "running", c(1))
+          ChangeState(df, "running", "readyQueue", c(1))
+          df$running$New.CPU.Burst <- FALSE
+          df$running$Last.CPU.Runtime <- 0
+
+      }else if(df$running[1,"Next.CPU.Runtime"] > df$readyQueue[1, "Next.CPU.Runtime"]){ #preempt without estimate
+         ChangeState(df, "readyQueue", "running", c(1))
+         ChangeState(df, "running", "readyQueue", c(1))
+         df$running$New.CPU.Burst <- FALSE
+         df$running$Last.CPU.Runtime <- 0
+      }
+
+    }
+
+    df$readyQueue$Response.Time[df$readyQueue$New.CPU.Burst == TRUE] <- df$readyQueue$Response.Time[df$readyQueue$New.CPU.Burst == TRUE] + 1
+    df$readyQueue$Total.Wait.Time <- df$readyQueue$Total.Wait.Time + 1
+    df$readyQueue$Turnaround.Time <- df$readyQueue$Turnaround.Time + 1
+  }
+
   
   
   CheckWaiting <- function(df){
@@ -496,8 +584,9 @@ server <- function(session, input, output) {
   ChangeCPUCounters <- function(df){
     
     df$running$Last.CPU.Runtime <- df$running$Last.CPU.Runtime + 1
-    df$running$CPU.Runtime <- df$running$CPU.Runtime - 1
+    df$running$Total.CPU.Runtime <- df$running$Total.CPU.Runtime - 1
     df$running$Turnaround.Time <- df$running$Turnaround.Time + 1
+    df$running$Next.CPU.Runtime <- df$running$Next.CPU.Runtime - 1
   }
   
   
@@ -524,11 +613,7 @@ server <- function(session, input, output) {
       return <- input$defaultEst
     } else{
       newEstimate = (input$alpha * last) + (1 - input$alpha)*estimate
-      
-      print(paste(last, " last cpu time"))
-      print(paste(estimate, " last estimate"))
-      print(paste(newEstimate, " new"))
-      print("--------------")
+
       return <- newEstimate
       
     }
@@ -555,6 +640,9 @@ server <- function(session, input, output) {
     ClearQueues(df_fcfs)
     ClearQueues(df_rr)
     ClearQueues(df_sjf)
+    ClearQueues(df_sjfexp)
+    ClearQueues(df_srtf)
+    ClearQueues(df_srtfexp)
     
   }
   
@@ -566,6 +654,22 @@ server <- function(session, input, output) {
     df$waiting <- data.frame()
     df$terminated <- data.frame()
     df$cpuIdleTime <- 0
+  }
+  
+  GetSJF <- function(){
+    if(input$estimateSJF){
+      if(input$preemptive){
+        df_srtfexp
+      } else{
+        df_sjfexp
+      }
+    } else{
+      if(input$preemptive){
+        df_srtf
+      } else{
+        df_sjf
+      }
+    }
   }
   
   
