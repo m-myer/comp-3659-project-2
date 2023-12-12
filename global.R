@@ -16,4 +16,6 @@ algorithms <- c("First Come First Serve",
                 "Shortest Remaining Time First",
                 "SRTF - Estimated")
 
+ioEventRange <- c(0:10)
+
 #source("R/anotherScript.R")

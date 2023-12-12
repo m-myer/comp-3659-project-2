@@ -1,0 +1,13 @@
+name: comp-3659-project-2
+title: comp-3659-project-2
+username: crispyricetreats
+account: crispyricetreats
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10738673
+bundleId: 8018853
+url: https://crispyricetreats.shinyapps.io/comp-3659-project-2/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: README.md
